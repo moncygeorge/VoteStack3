@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Choices</title>
+</head>
+<body>
+    <h1>Update Voting Choices</h1>
+    <form action="{{ url_for('update_choices') }}" method="POST">
+        <textarea name="new_choices" rows="10" cols="50" placeholder="Enter one choice per line"></textarea><br>
+        <button type="submit">Update Choices</button>
+    </form>
+    <a href="{{ url_for('admin_dashboard') }}">Back to Admin Dashboard</a>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{{ title if title else "VoteStack" }}</title>
+
+    <!-- Link to the manifest file for PWA -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+    <!-- Link to icons -->
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}" sizes="192x192">
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon-512x512.png') }}" sizes="512x512">
+
+    <!-- Additional CSS or meta tags here -->
+
+</head>
+<body>
+
+    <!-- You can include a header, navbar, or any other structure that will be common across all pages -->
+    <header>
+        <h1>Flask Voting App</h1>
+    </header>
+
+    <!-- Content from the child templates will go here -->
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Optionally, you can add a footer -->
+    <footer>
+        <p>Powered by Flask</p>
+    </footer>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/service-worker.js')
+      .then(function(registration) {
+        console.log('Service Worker registered with scope:', registration.scope);
+      })
+      .catch(function(error) {
+        console.log('Service Worker registration failed:', error);
+      });
+  }
+</script>
+</body>
+</html>
