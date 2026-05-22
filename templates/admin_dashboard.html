@@ -1,171 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard</title>
-    <!-- Bootstrap 5 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
-
-    <style>
-        /* Custom Styles for Modern Look */
-        body {
-            background-color: #f4f7fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        .container {
-            max-width: 1000px;
-            margin-top: 50px;
-        }
-
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .card-header {
-            background-color: #007bff;
-            color: white;
-            font-size: 1.25rem;
-            font-weight: bold;
-            border-radius: 15px 15px 0 0;
-        }
-
-        .btn-primary,
-        .btn-secondary {
-            font-size: 1rem;
-            border-radius: 50px;
-            transition: background-color 0.3s ease;
-        }
-
-        .btn-primary:hover,
-        .btn-secondary:hover {
-            background-color: #0056b3;
-            color: white;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .form-label {
-            font-weight: bold;
-        }
-
-        .form-control {
-            border-radius: 10px;
-        }
-
-        /* Custom Styles for Textarea */
-        #choices-input textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard – Votestack</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
 </head>
+<body class="bg-light">
+<div class="container py-4">
 
-<body>
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Admin Dashboard</h2>
+    <a href="/logout" class="btn btn-outline-secondary btn-sm">Logout</a>
+  </div>
 
-    <div class="container">
-        <div class="card">
-            <div class="card-header text-center">
-                Admin Dashboard
-            </div>
-            <div class="card-body">
-                <!-- Generate Tally Form -->
-                <div class="mb-3">
-                    <form action="{{ url_for('generate_tally') }}" method="POST">
-                        <button type="submit" class="btn btn-primary btn-lg w-100">Generate Tally</button>
-                    </form>
-                </div>
-
-                <!-- Update Role Form -->
-                <div class="mb-3">
-                    <button class="btn btn-secondary w-100" onclick="showPositionInput()">Update Role</button>
-                    <div id="position-input" class="hidden mt-3">
-                        <form action="{{ url_for('update_role') }}" method="POST">
-                            <label for="new_role" class="form-label">Enter New Role:</label>
-                            <input type="text" id="new_role" name="new_role" class="form-control" required>
-                            <button type="submit" class="btn btn-primary mt-3 w-100">Submit Role</button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- View Role Button -->
-                <div class="mb-3">
-                    <form action="{{ url_for('view_role') }}" method="GET">
-                        <button type="submit" class="btn btn-secondary w-100">View Role</button>
-                    </form>
-                </div>
-
-                <!-- View Choices Button -->
-                <div class="mb-3">
-                    <form action="{{ url_for('view_choices') }}" method="GET">
-                        <button type="submit" class="btn btn-secondary w-100">View Choices</button>
-                    </form>
-                </div>
-
-                <!-- Update Choices Section -->
-                <div class="mb-3">
-                    <button class="btn btn-secondary w-100" onclick="showChoiceInput()">Update Choices</button>
-                    <div id="choices-input" class="hidden mt-3">
-                        <form action="{{ url_for('update_choices') }}" method="POST">
-                            <label for="choices" class="form-label">Enter Voting Choices (one per line):</label>
-                            <textarea id="choices" name="choices" class="form-control" rows="5" required></textarea>
-                            <button type="submit" class="btn btn-primary mt-3 w-100">Submit Choices</button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Enter Voters Section -->
-                <div class="mb-3">
-                    <button class="btn btn-secondary w-100" onclick="showVoterInput()">Enter Number of Voters</button>
-                    <div id="voter-input" class="hidden mt-3">
-                        <form action="{{ url_for('enter_voters') }}" method="POST">
-                            <label for="num_voters" class="form-label">Enter Number of Voters:</label>
-                            <input type="number" id="num_voters" name="num_voters" class="form-control" required min="1">
-                            <button type="submit" class="btn btn-primary mt-3 w-100">Generate Voters</button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- View Users Button -->
-                <div class="mb-3">
-                    <form action="{{ url_for('view_usernames') }}" method="GET">
-                        <button type="submit" class="btn btn-secondary w-100">View Users</button>
-                    </form>
-                </div>
-
-                <div class="mb-3">
-                    <a href="{{ url_for('download_voters_pdf') }}" class="btn btn-primary w-100">Download Voters List</a>
-                </div>
-            </div>
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="row g-4">
+
+    <!-- ── Set Current Role ───────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Current Role / Position</div>
+        <div class="card-body">
+          {% if role %}
+            <p class="mb-3">Active role: <strong>{{ role }}</strong></p>
+          {% else %}
+            <p class="text-muted mb-3">No role set yet.</p>
+          {% endif %}
+          <form method="POST" action="/update_role">
+            <div class="mb-3">
+              <label for="new_role" class="form-label">Set New Role</label>
+              <input type="text" class="form-control" id="new_role" name="new_role"
+                     placeholder="e.g. Chairperson" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Update Role</button>
+          </form>
+        </div>
+      </div>
     </div>
 
-    <script>
-        // Function to show the role input field
-        function showPositionInput() {
-            document.getElementById('position-input').classList.toggle('hidden');
-        }
+    <!-- ── Set Choices ────────────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Candidates / Choices</div>
+        <div class="card-body">
+          <form method="POST" action="/update_choices">
+            <div class="mb-3">
+              <label for="choices" class="form-label">Enter Choices</label>
+              <textarea class="form-control" id="choices" name="choices" rows="5"
+                        placeholder="One choice per line:&#10;Alice Johnson&#10;Bob Smith&#10;Carol White"
+                        required></textarea>
+              <div class="form-text">One candidate per line. Replaces existing choices for the current role.</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Update Choices</button>
+          </form>
+          <a href="/view_choices" class="btn btn-outline-secondary btn-sm mt-2">View Choices</a>
+        </div>
+      </div>
+    </div>
 
-        // Function to show the voters input field
-        function showVoterInput() {
-            document.getElementById('voter-input').classList.toggle('hidden');
-        }
+    <!-- ── Add Voters ─────────────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Add Voters</div>
+        <div class="card-body">
+          <form method="POST" action="/enter_voters">
+            <div class="mb-3">
+              <label for="phone_numbers" class="form-label">Voter Phone Numbers</label>
+              <textarea
+                class="form-control"
+                id="phone_numbers"
+                name="phone_numbers"
+                rows="8"
+                placeholder="Enter one phone number per line:&#10;08012345678&#10;08098765432&#10;07031234567"
+                required
+              ></textarea>
+              <div class="form-text">One phone number per line. Duplicates are skipped automatically.</div>
+            </div>
+            <button type="submit" class="btn btn-success">Add Voters</button>
+          </form>
+          <a href="/view_usernames" class="btn btn-outline-secondary btn-sm mt-2">View Voters</a>
+        </div>
+      </div>
+    </div>
 
-        // Function to show the choices input field
-        function showChoiceInput() {
-            var choicesInput = document.getElementById('choices-input');
-            choicesInput.classList.toggle('hidden'); // This will show or hide the input
-        }
-    </script>
+    <!-- ── Tally ──────────────────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Results</div>
+        <div class="card-body">
+          <p class="text-muted">Generate the vote tally for the current role.</p>
+          <a href="/generate_tally" class="btn btn-warning">Generate Tally</a>
+        </div>
+      </div>
+    </div>
 
+  </div><!-- /row -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-
 </html>
