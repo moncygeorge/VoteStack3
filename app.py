@@ -2,6 +2,7 @@ import sqlite3
 import os
 
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
+from werkzeug.security import generate_password_hash, check_password_hash
 from docx import Document
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -46,20 +47,47 @@ def load_role():
 
 # ── auth ──────────────────────────────────────────────────────────────────────
 
+@app.route('/admin_login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if not username or not password:
+            flash("Please enter both username and password.", "danger")
+            return redirect(url_for('admin_login'))
+
+        try:
+            conn = get_db()
+            admin = conn.execute(
+                "SELECT * FROM admins WHERE username=?", (username,)
+            ).fetchone()
+            conn.close()
+
+            if admin and check_password_hash(admin['password_hash'], password):
+                session.clear()
+                session['username'] = 'admin'
+                session['is_admin'] = True
+                return redirect(url_for('admin_dashboard'))
+            else:
+                flash("Invalid username or password.", "danger")
+                return redirect(url_for('admin_login'))
+        except Exception as e:
+            flash(f"Database error: {e}", "danger")
+            return redirect(url_for('admin_login'))
+
+    return render_template('admin_login.html')
+
+
 @app.route('/login', methods=['POST'])
 def login():
     session.clear()
     phone = request.form.get('username', '').strip()
+    phone = ''.join(phone.split())
 
     if not phone:
         flash("Please enter a phone number.", "danger")
         return redirect(url_for('index'))
-
-    phone = ''.join(phone.split())   # strip whitespace
-
-    if phone == 'admin':
-        session['username'] = phone
-        return redirect(url_for('admin_dashboard'))
 
     try:
         conn = get_db()
@@ -70,10 +98,10 @@ def login():
 
         if user:
             session['username'] = phone
-            flash(f"Welcome {phone}", "success")
+            flash(f"Welcome!", "success")
             return redirect(url_for('vote'))
         else:
-            flash("Phone number not authorized", "danger")
+            flash("Phone number not authorized.", "danger")
             return redirect(url_for('index'))
     except Exception as e:
         flash(f"Database error: {e}", "danger")
@@ -207,7 +235,7 @@ def submit_vote_api():
 # ── admin dashboard ───────────────────────────────────────────────────────────
 
 def admin_required():
-    return 'username' in session and session['username'] == 'admin'
+    return session.get('is_admin') is True
 
 
 @app.route('/admin_dashboard', methods=['GET'])
