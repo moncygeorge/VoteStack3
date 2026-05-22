@@ -115,6 +115,44 @@ def logout():
     return redirect(url_for('index'))
 
 
+@app.route('/setup_admin', methods=['GET', 'POST'])
+def setup_admin():
+    # Block if any admin already exists
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM admins LIMIT 1").fetchone()
+    conn.close()
+    if existing:
+        flash("Admin account already exists.", "warning")
+        return redirect(url_for('admin_login'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm', '')
+
+        if not username or not password:
+            flash("All fields are required.", "danger")
+            return redirect(url_for('setup_admin'))
+        if password != confirm:
+            flash("Passwords do not match.", "danger")
+            return redirect(url_for('setup_admin'))
+        if len(password) < 8:
+            flash("Password must be at least 8 characters.", "danger")
+            return redirect(url_for('setup_admin'))
+
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO admins (username, password_hash) VALUES (?, ?)",
+            (username, generate_password_hash(password))
+        )
+        conn.commit()
+        conn.close()
+        flash("Admin account created! Please log in.", "success")
+        return redirect(url_for('admin_login'))
+
+    return render_template('setup_admin.html')
+
+
 # ── public pages ──────────────────────────────────────────────────────────────
 
 @app.route('/', methods=['GET'])
