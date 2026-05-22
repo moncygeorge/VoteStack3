@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard – Votestack</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
+</head>
+<body class="bg-light">
+<div class="container py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Admin Dashboard</h2>
+    <a href="/logout" class="btn btn-outline-secondary btn-sm">Logout</a>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="row g-4">
+
+    <!-- ── Set Current Role ───────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Current Role / Position</div>
+        <div class="card-body">
+          {% if role %}
+            <p class="mb-3">Active role: <strong>{{ role }}</strong></p>
+          {% else %}
+            <p class="text-muted mb-3">No role set yet.</p>
+          {% endif %}
+          <form method="POST" action="/update_role">
+            <div class="mb-3">
+              <label for="new_role" class="form-label">Set New Role</label>
+              <input type="text" class="form-control" id="new_role" name="new_role"
+                     placeholder="e.g. Chairperson" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Update Role</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Set Choices ────────────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Candidates / Choices</div>
+        <div class="card-body">
+          <form method="POST" action="/update_choices">
+            <div class="mb-3">
+              <label for="choices" class="form-label">Enter Choices</label>
+              <textarea class="form-control" id="choices" name="choices" rows="5"
+                        placeholder="One choice per line:&#10;Alice Johnson&#10;Bob Smith&#10;Carol White"
+                        required></textarea>
+              <div class="form-text">One candidate per line. Replaces existing choices for the current role.</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Update Choices</button>
+          </form>
+          <a href="/view_choices" class="btn btn-outline-secondary btn-sm mt-2">View Choices</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Add Voters ─────────────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Add Voters</div>
+        <div class="card-body">
+          <form method="POST" action="/enter_voters">
+            <div class="mb-3">
+              <label for="phone_numbers" class="form-label">Voter Phone Numbers</label>
+              <textarea
+                class="form-control"
+                id="phone_numbers"
+                name="phone_numbers"
+                rows="8"
+                placeholder="Enter one phone number per line:&#10;08012345678&#10;08098765432&#10;07031234567"
+                required
+              ></textarea>
+              <div class="form-text">One phone number per line. Duplicates are skipped automatically.</div>
+            </div>
+            <button type="submit" class="btn btn-success">Add Voters</button>
+          </form>
+          <a href="/view_usernames" class="btn btn-outline-secondary btn-sm mt-2">View Voters</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tally ──────────────────────────────────────── -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Results</div>
+        <div class="card-body">
+          <p class="text-muted">Generate the vote tally for the current role.</p>
+          <a href="/generate_tally" class="btn btn-warning">Generate Tally</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

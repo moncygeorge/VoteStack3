@@ -1,5 +1,4 @@
 import sqlite3
-import random
 import os
 
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
@@ -211,34 +210,11 @@ def admin_required():
     return 'username' in session and session['username'] == 'admin'
 
 
-@app.route('/admin_dashboard', methods=['GET', 'POST'])
+@app.route('/admin_dashboard', methods=['GET'])
 def admin_dashboard():
     if not admin_required():
         flash("Access restricted to admin only.", "danger")
         return redirect(url_for('index'))
-
-    if request.method == 'POST':
-        num_voters = request.form.get('num_voters', '')
-        if not num_voters.isdigit() or int(num_voters) <= 0:
-            flash("Please enter a valid number of voters.", "danger")
-            return redirect(url_for('admin_dashboard'))
-
-        num_voters = int(num_voters)
-        generated = [str(random.randint(1000, 9999)) for _ in range(num_voters)]
-
-        try:
-            conn = get_db()
-            existing = {r['phone_number'] for r in conn.execute("SELECT phone_number FROM users").fetchall()}
-            new_phones = [p for p in generated if p not in existing]
-            conn.executemany(
-                "INSERT OR IGNORE INTO users (phone_number) VALUES (?)",
-                [(p,) for p in new_phones]
-            )
-            conn.commit()
-            conn.close()
-            flash(f"{len(new_phones)} new voters added.", "success")
-        except Exception as e:
-            flash(f"Error: {e}", "danger")
 
     role = load_role()
     return render_template('admin_dashboard.html', role=role)
@@ -345,30 +321,30 @@ def enter_voters():
         flash("Access restricted to admin only.", "danger")
         return redirect(url_for('index'))
 
-    num_voters = request.form.get('num_voters', '')
-    if not num_voters.isdigit() or int(num_voters) <= 0:
-        flash("Please enter a valid number of voters.", "danger")
-        return redirect(url_for('admin_dashboard'))
+    raw = request.form.get('phone_numbers', '')
+    phones = [p.strip() for p in raw.splitlines() if p.strip()]
 
-    num_voters = int(num_voters)
-    generated = [str(random.randint(1000, 9999)) for _ in range(num_voters)]
+    if not phones:
+        flash("Please enter at least one phone number.", "danger")
+        return redirect(url_for('admin_dashboard'))
 
     try:
         conn = get_db()
-        existing = {r['phone_number'] for r in conn.execute("SELECT phone_number FROM users").fetchall()}
-        new_phones = [p for p in generated if p not in existing]
-
-        conn.executemany(
-            "INSERT OR IGNORE INTO users (phone_number) VALUES (?)",
-            [(p,) for p in new_phones]
-        )
+        added = 0
+        skipped = 0
+        for p in phones:
+            try:
+                conn.execute("INSERT INTO users (phone_number) VALUES (?)", (p,))
+                added += 1
+            except sqlite3.IntegrityError:
+                skipped += 1
         conn.commit()
-
-        all_phones = list(existing) + new_phones
         conn.close()
 
-        generate_pdf(all_phones)
-        flash(f"{len(new_phones)} new voters added and PDF generated.", "success")
+        msg = f"{added} voter(s) added."
+        if skipped:
+            msg += f" {skipped} duplicate(s) skipped."
+        flash(msg, "success")
     except Exception as e:
         flash(f"Error: {e}", "danger")
 
