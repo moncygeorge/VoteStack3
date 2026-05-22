@@ -1,0 +1,484 @@
+import sqlite3
+import random
+import os
+
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
+from docx import Document
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
+
+from init_db import create_tables, migrate_files_to_db
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key')
+
+DB_FILE = 'votestack3.db'
+
+# ── file paths kept for backward-compat / PDF generation ──────────────────────
+usernames_file = 'usernames.txt'
+choices_file   = 'choices.txt'
+votes_file     = 'votes.txt'
+role_file      = 'roles.txt'
+
+# ── initialise DB on every startup (creates tables if missing, migrates files) ─
+with app.app_context():
+    create_tables(DB_FILE)
+    migrate_files_to_db(DB_FILE, role_file, choices_file, votes_file)
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def get_db():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def load_role():
+    """Return the current role from the DB (single source of truth)."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key='current_role'"
+    ).fetchone()
+    conn.close()
+    return row['value'] if row else None
+
+
+# ── auth ──────────────────────────────────────────────────────────────────────
+
+@app.route('/login', methods=['POST'])
+def login():
+    session.clear()
+    phone = request.form.get('username', '').strip()
+
+    if not phone:
+        flash("Please enter a phone number.", "danger")
+        return redirect(url_for('index'))
+
+    phone = ''.join(phone.split())   # strip whitespace
+
+    if phone == 'admin':
+        session['username'] = phone
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        conn = get_db()
+        user = conn.execute(
+            "SELECT * FROM users WHERE phone_number=?", (phone,)
+        ).fetchone()
+        conn.close()
+
+        if user:
+            session['username'] = phone
+            flash(f"Welcome {phone}", "success")
+            return redirect(url_for('vote'))
+        else:
+            flash("Phone number not authorized", "danger")
+            return redirect(url_for('index'))
+    except Exception as e:
+        flash(f"Database error: {e}", "danger")
+        return redirect(url_for('index'))
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for('index'))
+
+
+# ── public pages ──────────────────────────────────────────────────────────────
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('login.html')
+
+
+@app.route('/vote')
+def vote():
+    if 'username' not in session:
+        return redirect(url_for('index'))
+
+    role = load_role()
+
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT choice FROM choices WHERE role=?", (role,)
+    ).fetchall() if role else []
+    conn.close()
+
+    choices = [r['choice'] for r in rows]
+
+    if not role or not choices:
+        return "No role or choices available to vote on."
+
+    return render_template('vote.html', role=role, choices=choices)
+
+
+@app.route('/view_role')
+def view_role():
+    role = load_role()
+    return render_template('view_role.html', role=role)
+
+
+# ── voting ────────────────────────────────────────────────────────────────────
+
+@app.route('/submit_vote', methods=['POST'])
+def submit_vote():
+    if 'username' not in session:
+        return redirect(url_for('index'))
+
+    role = load_role()
+    if not role:
+        flash("No active role to vote on.", "danger")
+        return redirect(url_for('vote'))
+
+    choice = request.form.get('choice')
+    if not choice:
+        flash("Please select a choice to vote for.", "danger")
+        return redirect(url_for('vote'))
+
+    username = session['username']
+
+    try:
+        conn = get_db()
+        existing = conn.execute(
+            "SELECT id FROM votes WHERE username=? AND role=?", (username, role)
+        ).fetchone()
+
+        if existing:
+            flash(f"You have already voted for '{role}'.", "danger")
+        else:
+            conn.execute(
+                "INSERT INTO votes (username, role, choice) VALUES (?, ?, ?)",
+                (username, role, choice)
+            )
+            conn.commit()
+            flash(f"Your vote for {choice} has been recorded!", "success")
+        conn.close()
+    except Exception as e:
+        flash(f"An error occurred: {e}", "danger")
+
+    return redirect(url_for('vote'))
+
+
+# ── API endpoints ─────────────────────────────────────────────────────────────
+
+@app.route('/api/current_role', methods=['GET'])
+def get_current_role_api():
+    return jsonify({"role": load_role()}), 200
+
+
+@app.route('/api/submit_vote', methods=['POST'])
+def submit_vote_api():
+    if 'username' not in session:
+        return jsonify({"error": "Please log in first."}), 401
+
+    role = load_role()
+    data = request.get_json()
+    choice = data.get('choice') if data else None
+
+    if not choice:
+        return jsonify({"error": "Please select a choice."}), 400
+
+    username = session['username']
+
+    try:
+        conn = get_db()
+        existing = conn.execute(
+            "SELECT id FROM votes WHERE username=? AND role=?", (username, role)
+        ).fetchone()
+
+        if existing:
+            conn.close()
+            return jsonify({"error": "You have already voted."}), 400
+
+        conn.execute(
+            "INSERT INTO votes (username, role, choice) VALUES (?, ?, ?)",
+            (username, role, choice)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"message": f"Your vote for {choice} has been recorded!"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── admin dashboard ───────────────────────────────────────────────────────────
+
+def admin_required():
+    return 'username' in session and session['username'] == 'admin'
+
+
+@app.route('/admin_dashboard', methods=['GET', 'POST'])
+def admin_dashboard():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        num_voters = request.form.get('num_voters', '')
+        if not num_voters.isdigit() or int(num_voters) <= 0:
+            flash("Please enter a valid number of voters.", "danger")
+            return redirect(url_for('admin_dashboard'))
+
+        num_voters = int(num_voters)
+        generated = [str(random.randint(1000, 9999)) for _ in range(num_voters)]
+
+        try:
+            conn = get_db()
+            existing = {r['phone_number'] for r in conn.execute("SELECT phone_number FROM users").fetchall()}
+            new_phones = [p for p in generated if p not in existing]
+            conn.executemany(
+                "INSERT OR IGNORE INTO users (phone_number) VALUES (?)",
+                [(p,) for p in new_phones]
+            )
+            conn.commit()
+            conn.close()
+            flash(f"{len(new_phones)} new voters added.", "success")
+        except Exception as e:
+            flash(f"Error: {e}", "danger")
+
+    role = load_role()
+    return render_template('admin_dashboard.html', role=role)
+
+
+@app.route('/update_role', methods=['POST'])
+def update_role():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    new_role = request.form.get('new_role', '').strip()
+    if not new_role:
+        flash("Role cannot be empty.", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('current_role', ?)",
+        (new_role,)
+    )
+    conn.commit()
+    conn.close()
+
+    # also keep the flat file in sync (for legacy / mobile clients)
+    with open(role_file, 'w') as f:
+        f.write(new_role)
+
+    flash(f"Role updated to '{new_role}'!", "success")
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/update_choices', methods=['POST'])
+def update_choices():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    role = load_role()
+    if not role:
+        flash("Set a role first before adding choices.", "warning")
+        return redirect(url_for('admin_dashboard'))
+
+    raw = request.form.get('choices', '')
+    new_choices = [c.strip() for c in raw.splitlines() if c.strip()]
+
+    try:
+        conn = get_db()
+        conn.execute("DELETE FROM choices WHERE role=?", (role,))
+        conn.executemany(
+            "INSERT OR IGNORE INTO choices (role, choice) VALUES (?, ?)",
+            [(role, c) for c in new_choices]
+        )
+        conn.commit()
+        conn.close()
+        flash("Choices updated successfully!", "success")
+    except Exception as e:
+        flash(f"Error updating choices: {e}", "danger")
+
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/view_choices', methods=['GET'])
+def view_choices():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    role = load_role()
+    conn = get_db()
+    rows = conn.execute("SELECT choice FROM choices WHERE role=?", (role,)).fetchall() if role else []
+    conn.close()
+    choices = [r['choice'] for r in rows]
+    return render_template('view_choices.html', choices=choices)
+
+
+@app.route('/generate_tally', methods=['GET', 'POST'])
+def generate_tally():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    role = load_role()
+    if not role:
+        flash("No role is currently set.", "warning")
+        return redirect(url_for('admin_dashboard'))
+
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT choice, COUNT(*) as cnt FROM votes WHERE role=? GROUP BY choice",
+        (role,)
+    ).fetchall()
+    conn.close()
+
+    tally = {r['choice']: r['cnt'] for r in rows}
+    return render_template('tally.html', role=role, tally=tally)
+
+
+# ── voter management ──────────────────────────────────────────────────────────
+
+@app.route('/enter_voters', methods=['POST'])
+def enter_voters():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    num_voters = request.form.get('num_voters', '')
+    if not num_voters.isdigit() or int(num_voters) <= 0:
+        flash("Please enter a valid number of voters.", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+    num_voters = int(num_voters)
+    generated = [str(random.randint(1000, 9999)) for _ in range(num_voters)]
+
+    try:
+        conn = get_db()
+        existing = {r['phone_number'] for r in conn.execute("SELECT phone_number FROM users").fetchall()}
+        new_phones = [p for p in generated if p not in existing]
+
+        conn.executemany(
+            "INSERT OR IGNORE INTO users (phone_number) VALUES (?)",
+            [(p,) for p in new_phones]
+        )
+        conn.commit()
+
+        all_phones = list(existing) + new_phones
+        conn.close()
+
+        generate_pdf(all_phones)
+        flash(f"{len(new_phones)} new voters added and PDF generated.", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/view_usernames')
+def view_usernames():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    conn = get_db()
+    rows = conn.execute("SELECT phone_number FROM users").fetchall()
+    conn.close()
+    usernames = [r['phone_number'] for r in rows]
+    return render_template('view_usernames.html', usernames=usernames)
+
+
+@app.route('/delete_all_voters', methods=['POST'])
+def delete_all_voters():
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    conn = get_db()
+    conn.execute("DELETE FROM users")
+    conn.commit()
+    conn.close()
+    flash("All voters deleted.", "success")
+    return redirect(url_for('view_usernames'))
+
+
+@app.route('/delete_voter/<username>', methods=['POST'])
+def delete_voter(username):
+    if not admin_required():
+        flash("Access restricted to admin only.", "danger")
+        return redirect(url_for('index'))
+
+    conn = get_db()
+    result = conn.execute("DELETE FROM users WHERE phone_number=?", (username,))
+    conn.commit()
+    conn.close()
+
+    if result.rowcount:
+        flash(f"Voter {username} removed.", "success")
+    else:
+        flash(f"Voter {username} not found.", "warning")
+
+    return redirect(url_for('view_usernames'))
+
+
+@app.route('/download_voters_pdf')
+def download_voters_pdf():
+    file_path = os.path.join('static', 'voters_list.pdf')
+    if not os.path.exists(file_path):
+        flash("Voters list PDF not found.", "danger")
+        return redirect(url_for('admin_dashboard'))
+    return send_file(file_path, as_attachment=True)
+
+
+# ── document helpers ──────────────────────────────────────────────────────────
+
+def create_word_document(usernames, output_file='static/voters_list.docx'):
+    doc = Document()
+    doc.add_heading('Voters List', level=1)
+    for u in usernames:
+        doc.add_paragraph(u)
+    doc.save(output_file)
+
+
+def generate_pdf(usernames, output_file='static/voters_list.pdf'):
+    os.makedirs('static', exist_ok=True)
+    c = canvas.Canvas(output_file, pagesize=letter)
+    width, height = letter
+
+    margin       = 50
+    column_width = (width - 3 * margin) / 2
+    label_height = 50
+    font_size    = 12
+    max_per_col  = 10
+
+    c.setFont("Helvetica", font_size)
+
+    left_col  = usernames[:max_per_col]
+    right_col = usernames[max_per_col:max_per_col * 2]
+
+    y_left  = height - margin - label_height
+    y_right = height - margin - label_height
+
+    for username in left_col:
+        c.setStrokeColor(colors.black)
+        c.setFillColor(colors.white)
+        c.rect(margin, y_left - label_height, column_width, label_height, fill=1)
+        c.setFillColor(colors.black)
+        c.drawString(margin + 10, y_left - label_height + 15, username)
+        y_left -= label_height + 5
+
+    for username in right_col:
+        c.setStrokeColor(colors.black)
+        c.setFillColor(colors.white)
+        c.rect(margin + column_width + margin, y_right - label_height, column_width, label_height, fill=1)
+        c.setFillColor(colors.black)
+        c.drawString(margin + column_width + margin + 10, y_right - label_height + 15, username)
+        y_right -= label_height + 5
+
+    c.save()
+
+
+# ── entrypoint ────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000, debug=False)
