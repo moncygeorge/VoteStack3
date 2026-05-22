@@ -23,6 +23,14 @@ def create_tables(db_file='votestack3.db'):
     cursor = conn.cursor()
 
     cursor.execute('''
+        CREATE TABLE IF NOT EXISTS admins (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             phone_number TEXT UNIQUE NOT NULL
