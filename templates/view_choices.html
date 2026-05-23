@@ -1,21 +1,34 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Choices</title>
-</head>
-<body>
-    <h1>Current Voting Choices</h1>
-    {% if choices %}
-        <ul>
-            {% for choice in choices %}
-                <li>{{ choice }}</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No choices available.</p>
-    {% endif %}
-    <a href="{{ url_for('admin_dashboard') }}">Back to Admin Dashboard</a>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Choices — VoteStack{% endblock %}
+
+{% block nav_links %}
+  <a href="/admin_dashboard">Dashboard</a>
+  <a href="/logout" style="color:var(--danger)">Sign out</a>
+{% endblock %}
+
+{% block content %}
+<div class="card card-wide">
+  <div class="eyebrow">Ballot Choices</div>
+  <h1>Candidates</h1>
+  <p class="subtitle">All choices for the current active role.</p>
+  <div class="accent-line"></div>
+
+  {% if choices %}
+  <div style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:1.5rem;">
+    {% for c in choices %}
+    <div style="display:flex; align-items:center; gap:0.75rem; padding:0.9rem 1rem; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <span style="color:var(--accent); font-size:0.8rem; font-weight:700; min-width:1.5rem;">{{ loop.index }}</span>
+      <span>{{ c }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center; padding:3rem 0; color:var(--text-muted);">
+    <div style="font-size:2rem; margin-bottom:0.75rem;">📭</div>
+    <p>No choices defined for this role.</p>
+  </div>
+  {% endif %}
+
+  <a href="/admin_dashboard" class="btn btn-secondary" style="width:100%">← Back to Dashboard</a>
+</div>
+{% endblock %}

@@ -1,180 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login – Votestack</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(135deg, #2c3e50, #4e73df);
-            font-family: 'Poppins', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .login-container {
-            background: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-        .admin-badge {
-            display: inline-block;
-            background: #4e73df;
-            color: white;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            padding: 4px 12px;
-            border-radius: 20px;
-            margin-bottom: 16px;
-        }
-        h2 {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 24px;
-        }
-        label {
-            display: block;
-            text-align: left;
-            font-weight: 500;
-            color: #555;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 15px;
-            color: #333;
-            margin-bottom: 16px;
-            box-sizing: border-box;
-            transition: border 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-        input:focus {
-            border-color: #4e73df;
-            outline: none;
-        }
-        .toggle-password {
-            position: relative;
-        }
-        .toggle-password input {
-            padding-right: 44px;
-        }
-        .toggle-password .eye-btn {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-80%);
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: #888;
-            font-size: 18px;
-            padding: 0;
-        }
-        button[type="submit"] {
-            width: 100%;
-            padding: 12px;
-            background-color: #4e73df;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-        button[type="submit"]:hover {
-            background-color: #2e59d9;
-        }
-        .voter-link {
-            margin-top: 20px;
-            font-size: 13px;
-            color: #888;
-        }
-        .voter-link a {
-            color: #4e73df;
-            text-decoration: none;
-        }
-        .voter-link a:hover {
-            text-decoration: underline;
-        }
-        .alert {
-            font-size: 14px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            text-align: left;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <div class="admin-badge">Admin Portal</div>
-        <h2>Admin Login</h2>
+{% extends "base.html" %}
+{% block title %}Admin — VoteStack{% endblock %}
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
+{% block content %}
+<div class="card">
+  <div class="eyebrow">Administration</div>
+  <h1>Admin<br>Access.</h1>
+  <p class="subtitle">Restricted to authorized administrators only.</p>
 
-        <form action="{{ url_for('admin_login') }}" method="POST">
-            <div>
-                <label for="username">Username</label>
-                <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    placeholder="Enter admin username"
-                    autocomplete="username"
-                    required
-                >
-            </div>
-            <div>
-                <label for="password">Password</label>
-                <div class="toggle-password">
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="Enter password"
-                        autocomplete="current-password"
-                        required
-                    >
-                    <button type="button" class="eye-btn" onclick="togglePassword()" title="Show/hide password">
-                        👁
-                    </button>
-                </div>
-            </div>
-            <button type="submit">Login</button>
-        </form>
-
-        <div class="voter-link">
-            Are you a voter? <a href="{{ url_for('index') }}">Login here</a>
-        </div>
+  {% if get_flashed_messages() %}
+  <div class="alerts">
+    {% for cat, msg in get_flashed_messages(with_categories=true) %}
+    <div class="alert alert-{{ cat }}">
+      {% if cat == 'success' %}✓{% elif cat == 'danger' %}✕{% else %}!{% endif %}
+      {{ msg }}
     </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
-    <script>
-        function togglePassword() {
-            const input = document.getElementById('password');
-            input.type = input.type === 'password' ? 'text' : 'password';
-        }
-    </script>
-</body>
-</html>
+  <form method="POST" action="/admin_login">
+    <div class="field">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" autocomplete="username" autofocus required />
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Sign In →</button>
+  </form>
+
+  <hr class="divider">
+  <div style="text-align:center">
+    <a href="/" style="font-size:0.8rem; color:var(--text-muted); text-decoration:none;">← Voter portal</a>
+  </div>
+</div>
+{% endblock %}

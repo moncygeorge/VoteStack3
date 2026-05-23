@@ -1,28 +1,70 @@
 {% extends "base.html" %}
+{% block title %}Voters — VoteStack{% endblock %}
+
+{% block nav_links %}
+  <a href="/admin_dashboard">Dashboard</a>
+  <a href="/logout" style="color:var(--danger)">Sign out</a>
+{% endblock %}
 
 {% block content %}
-  <h1>View and Delete Voters</h1>
+<div class="card card-wide">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.25rem;">
+    <div class="eyebrow">Voter Registry</div>
+    <span class="badge badge-accent">{{ usernames | length }} registered</span>
+  </div>
+  <h1>Voters</h1>
+  <p class="subtitle">All registered voter phone numbers.</p>
+  <div class="accent-line"></div>
 
-  <!-- Delete All Form -->
-  <form action="{{ url_for('delete_all_voters') }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete all voters?');">
-    <button type="submit" class="btn btn-danger">Delete All</button>
-  </form>
-  <br><br>
-
-  {% if not usernames %}
-    <p>No users found.</p>
-  {% else %}
-    <ul>
-      {% for username in usernames %}
-        <li>
-          {{ username }}
-          <form action="{{ url_for('delete_voter', username=username) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this voter?');">
-            <button type="submit" class="btn btn-danger">Delete</button>
-          </form>
-        </li>
-      {% endfor %}
-    </ul>
+  {% if get_flashed_messages() %}
+  <div class="alerts">
+    {% for cat, msg in get_flashed_messages(with_categories=true) %}
+    <div class="alert alert-{{ cat }}">
+      {% if cat == 'success' %}✓{% elif cat == 'danger' %}✕{% else %}!{% endif %}
+      {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
   {% endif %}
 
-  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+  {% if usernames %}
+  <div style="overflow-x:auto; margin-bottom:1.5rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Phone Number</th>
+          <th style="text-align:right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usernames %}
+        <tr>
+          <td style="color:var(--text-muted); font-size:0.8rem;">{{ loop.index }}</td>
+          <td style="font-family: monospace; font-size:0.9rem;">{{ u }}</td>
+          <td style="text-align:right;">
+            <form method="POST" action="/delete_voter/{{ u }}" style="display:inline;" onsubmit="return confirm('Remove {{ u }}?')">
+              <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="POST" action="/delete_all_voters" onsubmit="return confirm('Delete ALL voters? This cannot be undone.')">
+    <button type="submit" class="btn btn-danger" style="width:100%">🗑 Delete All Voters</button>
+  </form>
+
+  {% else %}
+  <div style="text-align:center; padding:3rem 0; color:var(--text-muted);">
+    <div style="font-size:2rem; margin-bottom:0.75rem;">📋</div>
+    <p>No voters registered yet.</p>
+  </div>
+  {% endif %}
+
+  <hr class="divider">
+  <a href="/admin_dashboard" class="btn btn-secondary" style="width:100%">← Back to Dashboard</a>
+</div>
 {% endblock %}

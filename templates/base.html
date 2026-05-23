@@ -1,47 +1,417 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>{{ title if title else "VoteStack" }}</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}VoteStack{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0d0f;
+      --surface: #141518;
+      --surface2: #1c1e24;
+      --border: #272a33;
+      --accent: #e8f050;
+      --accent2: #50f0c8;
+      --text: #f0f1f4;
+      --text-muted: #7a7d8a;
+      --danger: #f05060;
+      --success: #50f0a0;
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
 
-    <!-- Link to the manifest file for PWA -->
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <!-- Link to icons -->
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}" sizes="192x192">
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-512x512.png') }}" sizes="512x512">
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
 
-    <!-- Additional CSS or meta tags here -->
+    /* ── noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
 
+    /* ── nav ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      height: 60px;
+      background: rgba(12,13,15,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-brand {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.3rem;
+      color: var(--accent);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.4rem 0.8rem;
+      border-radius: var(--radius-sm);
+      transition: color 0.2s, background 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+
+    /* ── layout ── */
+    .page {
+      position: relative;
+      z-index: 1;
+      min-height: calc(100vh - 60px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .card-wide { max-width: 720px; }
+    .card-xl   { max-width: 960px; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── typography ── */
+    .eyebrow {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2rem;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.4rem;
+    }
+
+    h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.4rem;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.8rem;
+    }
+
+    /* ── form elements ── */
+    .field { margin-bottom: 1.2rem; }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      padding: 0.75rem 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(232,240,80,0.12);
+    }
+
+    textarea { resize: vertical; min-height: 120px; }
+
+    /* ── buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      transition: all 0.18s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0c0d0f;
+      width: 100%;
+    }
+    .btn-primary:hover { background: #f5ff6b; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(232,240,80,0.25); }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+
+    .btn-sm {
+      padding: 0.45rem 1rem;
+      font-size: 0.8rem;
+    }
+
+    /* ── alerts ── */
+    .alerts { margin-bottom: 1.2rem; }
+
+    .alert {
+      padding: 0.8rem 1rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .alert-success { background: rgba(80,240,160,0.1); border: 1px solid rgba(80,240,160,0.25); color: var(--success); }
+    .alert-danger  { background: rgba(240,80,96,0.1);  border: 1px solid rgba(240,80,96,0.25);  color: var(--danger); }
+    .alert-warning { background: rgba(240,180,80,0.1); border: 1px solid rgba(240,180,80,0.25); color: #f0b450; }
+
+    /* ── divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.5rem 0;
+    }
+
+    /* ── badge ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .badge-accent { background: rgba(232,240,80,0.12); color: var(--accent); border: 1px solid rgba(232,240,80,0.25); }
+    .badge-teal   { background: rgba(80,240,200,0.12); color: var(--accent2); border: 1px solid rgba(80,240,200,0.25); }
+
+    /* ── grid ── */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+    /* ── stat card ── */
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1.2rem 1.4rem;
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .stat-card .stat-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2rem;
+      line-height: 1;
+      color: var(--accent);
+    }
+
+    /* ── table ── */
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 0.75rem 1rem; font-size: 0.9rem; }
+
+    /* ── progress bar ── */
+    .progress-wrap {
+      background: var(--surface2);
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+      margin-top: 0.4rem;
+    }
+    .progress-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.8s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* ── vote option ── */
+    .vote-options { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; }
+
+    .vote-option {
+      position: relative;
+    }
+
+    .vote-option input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+    }
+
+    .vote-option label {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.2rem;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.95rem;
+      font-weight: 400;
+      color: var(--text);
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    }
+
+    .vote-option label .radio-dot {
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .vote-option input[type="radio"]:checked + label {
+      border-color: var(--accent);
+      background: rgba(232,240,80,0.06);
+      box-shadow: 0 0 0 3px rgba(232,240,80,0.1);
+    }
+
+    .vote-option input[type="radio"]:checked + label .radio-dot {
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: inset 0 0 0 3px var(--surface2);
+    }
+
+    .vote-option label:hover {
+      border-color: rgba(232,240,80,0.4);
+      background: rgba(232,240,80,0.03);
+    }
+
+    /* ── section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    /* ── glow accent line ── */
+    .accent-line {
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), transparent);
+      border-radius: 999px;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 600px) {
+      .grid2, .grid3 { grid-template-columns: 1fr; }
+      .card { padding: 1.75rem; }
+    }
+  </style>
 </head>
 <body>
 
-    <!-- You can include a header, navbar, or any other structure that will be common across all pages -->
-    <header>
-        <h1>Flask Voting App</h1>
-    </header>
+<nav>
+  <a class="nav-brand" href="/">VoteStack</a>
+  <div class="nav-links">
+    {% block nav_links %}{% endblock %}
+  </div>
+</nav>
 
-    <!-- Content from the child templates will go here -->
-    <div class="content">
-        {% block content %}{% endblock %}
-    </div>
+<div class="page">
+  {% block content %}{% endblock %}
+</div>
 
-    <!-- Optionally, you can add a footer -->
-    <footer>
-        <p>Powered by Flask</p>
-    </footer>
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/service-worker.js')
-      .then(function(registration) {
-        console.log('Service Worker registered with scope:', registration.scope);
-      })
-      .catch(function(error) {
-        console.log('Service Worker registration failed:', error);
-      });
-  }
-</script>
 </body>
 </html>
