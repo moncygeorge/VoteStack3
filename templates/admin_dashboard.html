@@ -9,16 +9,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="card card-xl" style="align-self:flex-start; margin: 0 auto;">
+<div class="card card-xl" style="align-self:flex-start; margin:0 auto;">
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.25rem;">
     <div class="eyebrow">Control Panel</div>
     <span class="badge badge-teal">Admin</span>
   </div>
   <h1>Dashboard</h1>
-  <p class="subtitle" style="margin-bottom:1.5rem;">
-    Current role: {% if role %}<span class="badge badge-accent">{{ role }}</span>{% else %}<span style="color:var(--text-muted)">None set</span>{% endif %}
-  </p>
+
+  <!-- current role + voting status banner -->
+  <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.5rem; flex-wrap:wrap;">
+    {% if role %}
+      <span class="badge badge-accent">{{ role }}</span>
+    {% else %}
+      <span style="font-size:0.85rem; color:var(--text-muted)">No role set</span>
+    {% endif %}
+
+    {% if voting_open %}
+      <span class="badge" style="background:rgba(80,240,160,0.12);color:var(--success);border:1px solid rgba(80,240,160,0.25);">● Voting Open</span>
+    {% else %}
+      <span class="badge" style="background:rgba(240,80,96,0.1);color:var(--danger);border:1px solid rgba(240,80,96,0.25);">● Voting Closed</span>
+    {% endif %}
+  </div>
+
   <div class="accent-line"></div>
 
   {% if get_flashed_messages() %}
@@ -32,19 +45,52 @@
   </div>
   {% endif %}
 
+  <!-- ── VOTING CONTROL ── big prominent button ── -->
+  <div style="background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1.4rem; margin-bottom:1.5rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+      <div>
+        <div style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.3rem;">Voting Control</div>
+        <div style="font-size:0.9rem;">
+          {% if voting_open %}
+            Voters can currently cast ballots for <strong>{{ role or 'this role' }}</strong>.
+            Close voting to reveal the tally.
+          {% else %}
+            Voting is closed.
+            {% if role %}Open voting to let voters cast ballots for <strong>{{ role }}</strong>.{% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <form method="POST" action="/toggle_voting" style="flex-shrink:0;">
+        {% if voting_open %}
+          <button type="submit" class="btn" style="background:var(--danger); color:#fff; padding:0.7rem 1.6rem; width:auto;">
+            Close Voting ✕
+          </button>
+        {% else %}
+          <button type="submit" class="btn btn-primary" style="width:auto; padding:0.7rem 1.6rem;" {% if not role %}disabled title="Set a role first"{% endif %}>
+            Open Voting →
+          </button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
   <div class="grid2" style="margin-bottom:1.5rem;">
 
     <!-- Set Role -->
     <div class="stat-card">
-      <div class="stat-label">Set Active Role</div>
+      <div class="stat-label">Set Role</div>
       <p style="font-size:0.82rem; color:var(--text-muted); margin:0.5rem 0 1rem;">
-        The role voters will see on the ballot.
+        Sets the role name voters will see on the ballot.
+        {% if voting_open %}<span style="color:var(--danger)">Close voting first before changing.</span>{% endif %}
       </p>
       <form method="POST" action="/update_role">
         <div class="field">
-          <input type="text" name="new_role" placeholder="e.g. President 2025" value="{{ role or '' }}" required />
+          <input type="text" name="new_role" placeholder="e.g. Club President 2025"
+            value="{{ role or '' }}"
+            {% if voting_open %}disabled{% endif %} required />
         </div>
-        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">Update Role</button>
+        <button type="submit" class="btn btn-primary btn-sm" style="width:100%"
+          {% if voting_open %}disabled{% endif %}>Update Role</button>
       </form>
     </div>
 
@@ -52,13 +98,16 @@
     <div class="stat-card">
       <div class="stat-label">Set Choices</div>
       <p style="font-size:0.82rem; color:var(--text-muted); margin:0.5rem 0 1rem;">
-        One candidate name per line for the current role.
+        One candidate name per line.
+        {% if voting_open %}<span style="color:var(--danger)">Close voting first.</span>{% endif %}
       </p>
       <form method="POST" action="/update_choices">
         <div class="field">
-          <textarea name="choices" placeholder="Alice Johnson&#10;Bob Smith&#10;Carol White" rows="4"></textarea>
+          <textarea name="choices" placeholder="Alice Johnson&#10;Bob Smith&#10;Carol White" rows="4"
+            {% if voting_open %}disabled{% endif %}></textarea>
         </div>
-        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">Update Choices</button>
+        <button type="submit" class="btn btn-primary btn-sm" style="width:100%"
+          {% if voting_open %}disabled{% endif %}>Update Choices</button>
       </form>
     </div>
 
@@ -72,7 +121,7 @@
     <div class="stat-card">
       <div class="stat-label">Add Voters</div>
       <p style="font-size:0.82rem; color:var(--text-muted); margin:0.5rem 0 1rem;">
-        One phone number per line. Duplicates are skipped automatically.
+        One phone number per line. Duplicates skipped.
       </p>
       <form method="POST" action="/enter_voters">
         <div class="field">
@@ -86,10 +135,10 @@
     <div class="stat-card">
       <div class="stat-label">Quick Links</div>
       <div style="display:flex; flex-direction:column; gap:0.6rem; margin-top:0.75rem;">
-        <a href="/view_usernames" class="btn btn-secondary btn-sm">👥 View Voters</a>
-        <a href="/view_choices" class="btn btn-secondary btn-sm">📋 View Choices</a>
-        <a href="/generate_tally" class="btn btn-secondary btn-sm">📊 Live Tally</a>
-        <a href="/download_voters_pdf" class="btn btn-secondary btn-sm">⬇ Download Voter PDF</a>
+        <a href="/view_usernames"  class="btn btn-secondary btn-sm">👥 View Voters</a>
+        <a href="/view_choices"    class="btn btn-secondary btn-sm">📋 View Choices</a>
+        <a href="/generate_tally"  class="btn btn-secondary btn-sm">📊 Live Tally</a>
+        <a href="/download_voters_pdf" class="btn btn-secondary btn-sm">⬇ Download PDF</a>
       </div>
     </div>
 

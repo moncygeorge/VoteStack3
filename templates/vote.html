@@ -1,20 +1,70 @@
 {% extends "base.html" %}
-{% block title %}Vote — {{ role }} — VoteStack{% endblock %}
+{% block title %}Vote — VoteStack{% endblock %}
 
 {% block nav_links %}
   <a href="/logout">Sign out</a>
 {% endblock %}
 
 {% block content %}
-<div class="card card-wide">
-  <div class="eyebrow">Active Ballot</div>
-  <h1>{{ role }}</h1>
-  <p class="subtitle">Select one candidate below and submit your vote. This action cannot be undone.</p>
-  <div class="accent-line"></div>
+<div class="card card-wide" id="main-card">
 
-  {% if get_flashed_messages() %}
-  <div class="alerts">
-    {% for cat, msg in get_flashed_messages(with_categories=true) %}
+  <!-- ── STATE 1: BALLOT ── -->
+  <div id="state-ballot" style="display:none">
+    <div class="eyebrow">Active Ballot</div>
+    <h1 id="ballot-role"></h1>
+    <p class="subtitle">Select one candidate and submit your vote.</p>
+    <div class="accent-line"></div>
+    <div class="vote-options" id="choices-list"></div>
+    <button class="btn btn-primary" id="submit-btn" onclick="submitVote()">Submit Vote →</button>
+    <p style="margin-top:1rem; font-size:0.78rem; color:var(--text-muted); text-align:center;">
+      Your vote is confidential and recorded securely.
+    </p>
+  </div>
+
+  <!-- ── STATE 2: ALREADY VOTED (waiting for close) ── -->
+  <div id="state-voted" style="display:none; text-align:center; padding:2rem 0;">
+    <div style="font-size:2.5rem; margin-bottom:1rem;">✓</div>
+    <div class="eyebrow">Vote Recorded</div>
+    <h1 id="voted-role" style="margin-bottom:0.5rem;"></h1>
+    <p class="subtitle">Your vote has been counted.<br>Waiting for voting to close…</p>
+    <div style="margin-top:1.5rem; display:inline-flex; align-items:center; gap:0.5rem; font-size:0.8rem; color:var(--text-muted);">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;animation:pulse 1.5s ease-in-out infinite;"></span>
+      Live
+    </div>
+  </div>
+
+  <!-- ── STATE 3: TALLY ── -->
+  <div id="state-tally" style="display:none">
+    <div class="eyebrow">Results</div>
+    <h1 id="tally-role" style="margin-bottom:0.25rem;"></h1>
+    <p class="subtitle" id="tally-total"></p>
+    <div class="accent-line"></div>
+    <div id="tally-bars" style="margin-bottom:1.5rem;"></div>
+    <div class="grid3" id="tally-stats"></div>
+    <p style="margin-top:1.5rem; font-size:0.78rem; color:var(--text-muted); text-align:center; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--accent2);display:inline-block;animation:pulse 1.5s ease-in-out infinite;"></span>
+      Waiting for next role…
+    </p>
+  </div>
+
+  <!-- ── STATE 4: WAITING (no role set) ── -->
+  <div id="state-waiting" style="display:none; text-align:center; padding:2.5rem 0;">
+    <div style="margin-bottom:1.2rem;">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block">
+        <circle cx="22" cy="22" r="20" stroke="var(--border)" stroke-width="2"/>
+        <circle cx="22" cy="22" r="20" stroke="var(--accent)" stroke-width="2" stroke-dasharray="30 96" style="animation:spin 2s linear infinite;transform-origin:center"/>
+      </svg>
+    </div>
+    <div class="eyebrow">Standby</div>
+    <h2 style="color:var(--text-muted); font-size:1.2rem;">Next role loading…</h2>
+    <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">The admin will open the next ballot shortly.</p>
+  </div>
+
+  <!-- flash messages (shown briefly on page load) -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="alerts" id="flash-msgs">
+    {% for cat, msg in messages %}
     <div class="alert alert-{{ cat }}">
       {% if cat == 'success' %}✓{% elif cat == 'danger' %}✕{% else %}!{% endif %}
       {{ msg }}
@@ -22,25 +72,144 @@
     {% endfor %}
   </div>
   {% endif %}
+  {% endwith %}
 
-  <form method="POST" action="/submit_vote">
-    <div class="vote-options">
-      {% for choice in choices %}
-      <div class="vote-option">
-        <input type="radio" name="choice" id="choice_{{ loop.index }}" value="{{ choice }}" required />
-        <label for="choice_{{ loop.index }}">
-          <span class="radio-dot"></span>
-          {{ choice }}
-        </label>
-      </div>
-      {% endfor %}
-    </div>
-
-    <button type="submit" class="btn btn-primary">Submit Vote →</button>
-  </form>
-
-  <p style="margin-top:1rem; font-size:0.78rem; color:var(--text-muted); text-align:center;">
-    Your vote is confidential and recorded securely.
-  </p>
 </div>
+
+<style>
+@keyframes spin  { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.8)} }
+</style>
+
+<script>
+// ── seed from server on first load ──
+let _state = {
+  role:       {{ role | tojson }},
+  status:     {{ status | tojson }},      // 'open' | 'closed'
+  choices:    {{ choices | tojson }},
+  has_voted:  {{ 'true' if has_voted else 'false' }},
+  tally:      {{ tally | tojson }}
+};
+
+// ── state machine ──
+function render(s) {
+  ['ballot','voted','tally','waiting'].forEach(id =>
+    document.getElementById('state-' + id).style.display = 'none'
+  );
+
+  if (!s.role) {
+    show('waiting'); return;
+  }
+
+  if (s.status === 'open') {
+    if (s.has_voted) {
+      document.getElementById('voted-role').textContent = s.role;
+      show('voted');
+    } else {
+      buildBallot(s.role, s.choices);
+      show('ballot');
+    }
+  } else {
+    // closed → show tally
+    buildTally(s.role, s.tally);
+    show('tally');
+  }
+}
+
+function show(id) {
+  document.getElementById('state-' + id).style.display = 'block';
+}
+
+function buildBallot(role, choices) {
+  document.getElementById('ballot-role').textContent = role;
+  document.getElementById('choices-list').innerHTML = choices.map((c, i) => `
+    <div class="vote-option">
+      <input type="radio" name="choice" id="c${i}" value="${c}" required />
+      <label for="c${i}"><span class="radio-dot"></span>${escHtml(c)}</label>
+    </div>`).join('');
+}
+
+function buildTally(role, tally) {
+  document.getElementById('tally-role').textContent = role;
+  const entries = Object.entries(tally).sort((a,b) => b[1]-a[1]);
+  const total = entries.reduce((s,[,v]) => s+v, 0);
+  document.getElementById('tally-total').textContent =
+    total + ' vote' + (total !== 1 ? 's' : '') + ' counted';
+
+  document.getElementById('tally-bars').innerHTML = entries.map(([name, count]) => {
+    const pct = total > 0 ? ((count/total)*100).toFixed(1) : 0;
+    return `
+      <div style="margin-bottom:1.1rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-weight:500;font-size:0.9rem;">${escHtml(name)}</span>
+          <span style="color:var(--accent);font-weight:600;font-size:0.82rem;">${count} · ${pct}%</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+
+  const winner = entries[0]?.[0] ?? '—';
+  document.getElementById('tally-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">${total}</div></div>
+    <div class="stat-card"><div class="stat-label">Candidates</div><div class="stat-value">${entries.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Leading</div><div class="stat-value" style="font-size:1rem;margin-top:4px;">${escHtml(winner)}</div></div>`;
+}
+
+async function submitVote() {
+  const choice = document.querySelector('input[name="choice"]:checked')?.value;
+  if (!choice) { alert('Please select a candidate.'); return; }
+
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('submit-btn').textContent = 'Submitting…';
+
+  try {
+    const res = await fetch('/api/submit_vote', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({choice})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      _state.has_voted = true;
+      render(_state);
+    } else {
+      alert(data.error || 'Something went wrong.');
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('submit-btn').textContent = 'Submit Vote →';
+    }
+  } catch(e) {
+    alert('Network error. Please try again.');
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('submit-btn').textContent = 'Submit Vote →';
+  }
+}
+
+// ── polling ──
+async function poll() {
+  try {
+    const res  = await fetch('/api/voter_status');
+    const data = await res.json();
+    if (!res.ok) return;
+
+    const roleChanged = data.role !== _state.role;
+    if (roleChanged) _state.has_voted = false; // new role → voter hasn't voted yet
+
+    _state.role      = data.role;
+    _state.status    = data.status;
+    _state.choices   = data.choices;
+    _state.tally     = data.tally;
+    if (!roleChanged) _state.has_voted = data.has_voted;
+
+    render(_state);
+  } catch(e) { /* ignore */ }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// initial render then poll every 4s
+render(_state);
+setInterval(poll, 4000);
+</script>
 {% endblock %}
